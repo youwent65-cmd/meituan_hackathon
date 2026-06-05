@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>外呼任务对话模型 — 指令遵循能力评估系统</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>
+      <div>
+        <h1>指令遵循能力自动评估系统</h1>
+        <span class="header-sub">外呼任务对话模型 · 多维度量化评测</span>
+      </div>
+    </div>
+    <div class="header-status" id="header-status">
+      <span class="status-dot"></span>
+      <span>就绪</span>
+    </div>
+  </div>
+</header>
+
+<!-- Main Content -->
+<main class="main">
+
+  <!-- === Phase 1: 输入面板 === -->
+  <section id="input-section" class="panel-group">
+    <div class="card upload-card">
+      <div class="card-header">
+        <h2>选择指令文件</h2>
+      </div>
+      <div class="card-body">
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept=".xlsx,.xls,.json,.md" hidden>
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="upload-text">拖拽文件到此处，或 <span class="upload-link">点击选择</span></p>
+          <p class="upload-hint">支持 Excel (.xlsx/.xls)、JSON (.json)、Markdown (.md)</p>
+          <p class="upload-filename" id="filename-display"></p>
+        </div>
+        {% if sample_exists %}
+        <button class="btn btn-outline btn-sample" id="btn-sample">使用样例文件演示</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card config-card">
+      <div class="card-header">
+        <h2>评估配置</h2>
+      </div>
+      <div class="card-body">
+        <div class="config-grid">
+          <div class="config-item">
+            <label>用户画像数量 <span class="config-val" id="val-profiles">6</span></label>
+            <input type="range" id="profiles" min="2" max="12" value="6" step="1">
+          </div>
+          <div class="config-item">
+            <label>最大对话轮次 <span class="config-val" id="val-turns">15</span></label>
+            <input type="range" id="max-turns" min="5" max="30" value="15" step="1">
+          </div>
+          <div class="config-item config-switch">
+            <label>LLM 增强评测</label>
+            <label class="toggle">
+              <input type="checkbox" id="use-llm">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="config-item" id="llm-key-group" style="display:none">
+            <label>LLM 提供商</label>
+            <select id="llm-provider" class="input-text" style="width:100%">
+              <option value="deepseek">DeepSeek</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div class="config-item" id="llm-key-group2" style="display:none">
+            <label>LLM API Key</label>
+            <input type="password" id="llm-key" class="input-text" placeholder="sk-...">
+          </div>
+          <div class="config-item" id="llm-base-url-group" style="display:none">
+            <label>自定义端点（可选）</label>
+            <input type="text" id="llm-base-url" class="input-text" placeholder="留空使用默认端点">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary btn-run" id="btn-run" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        开始评估
+      </button>
+    </div>
+  </section>
+
+  <!-- === Phase 2: 进度面板 === -->
+  <section id="progress-section" class="panel-group" style="display:none">
+    <div class="card progress-card">
+      <div class="card-body">
+        <div class="progress-ring-container">
+          <svg class="progress-ring" viewBox="0 0 120 120">
+            <circle class="progress-ring-bg" cx="60" cy="60" r="52"/>
+            <circle class="progress-ring-fill" cx="60" cy="60" r="52" id="progress-circle"/>
+          </svg>
+          <div class="progress-text" id="progress-text">0%</div>
+        </div>
+        <p class="progress-phase" id="progress-phase">正在初始化...</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- === Phase 3: 结果面板 === -->
+  <section id="result-section" class="panel-group" style="display:none">
+
+    <!-- 概览卡片 -->
+    <div class="overview-row" id="overview-row"></div>
+
+    <!-- 指令标签切换 -->
+    <div class="tabs" id="inst-tabs"></div>
+
+    <!-- 图表行 -->
+    <div class="charts-row" id="charts-row">
+      <div class="card chart-card">
+        <div class="card-header"><h2>综合得分</h2></div>
+        <div class="card-body chart-body" id="chart-gauge"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header"><h2>五维度雷达图</h2></div>
+        <div class="card-body chart-body" id="chart-radar"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header"><h2>维度得分对比</h2></div>
+        <div class="card-body chart-body" id="chart-bar"></div>
+      </div>
+    </div>
+
+    <!-- 违规详情 & 报告预览 -->
+    <div class="detail-row">
+      <div class="card violation-card">
+        <div class="card-header">
+          <h2>违规详情</h2>
+          <span class="violation-count" id="violation-count"></span>
+        </div>
+        <div class="card-body" id="violation-list"></div>
+      </div>
+      <div class="card report-card">
+        <div class="card-header">
+          <h2>评测报告预览</h2>
+          <div class="report-actions">
+            <button class="btn btn-sm btn-outline" id="btn-download-md">下载 Markdown</button>
+            <button class="btn btn-sm btn-outline" id="btn-download-json">下载 JSON</button>
+          </div>
+        </div>
+        <div class="card-body report-body" id="report-preview"></div>
+      </div>
+    </div>
+
+    <!-- 改进建议 -->
+    <div class="card">
+      <div class="card-header"><h2>改进建议</h2></div>
+      <div class="card-body" id="improvement-list"></div>
+    </div>
+
+  </section>
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <p>外呼任务对话模型 · 指令遵循能力自动评估系统 v1.0</p>
+</footer>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

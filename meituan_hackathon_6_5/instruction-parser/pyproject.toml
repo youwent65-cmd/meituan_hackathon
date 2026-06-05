@@ -1,0 +1,13 @@
+[project]
+name = "instruction-parser"
+version = "0.1.0"
+description = "外呼任务对话模型指令解析器 - 将自然语言指令解析为结构化数据"
+requires-python = ">=3.11"
+dependencies = [
+    "markdown-it-py>=3.0.0",
+    "anthropic>=0.20.0",
+    "openpyxl>=3.1.0",
+]
+
+[project.scripts]
+parse-instruction = "src.main:main"
